@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>💕 Color Hunt - Pori & Lucuska 💕</title>
-  <script src="https://upload-widget.cloudinary.com/latest/CloudinaryUploadWidget.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/appwrite@latest"></script>
   <style>
     * {
       margin: 0;
@@ -508,6 +508,14 @@
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
     }
 
+    .love-text {
+      text-align: center;
+      color: #ff6b9d;
+      font-style: italic;
+      margin-top: 20px;
+      font-size: 0.95rem;
+    }
+
     @media (max-width: 900px) {
       .main-grid {
         grid-template-columns: 1fr;
@@ -520,23 +528,6 @@
       .photos-grid {
         grid-template-columns: repeat(2, 1fr);
       }
-    }
-
-    .error-message {
-      background: #ffebee;
-      border-left: 4px solid #ff4444;
-      padding: 15px;
-      border-radius: 8px;
-      color: #c62828;
-      margin-bottom: 15px;
-    }
-
-    .love-text {
-      text-align: center;
-      color: #ff6b9d;
-      font-style: italic;
-      margin-top: 20px;
-      font-size: 0.95rem;
     }
   </style>
 </head>
@@ -553,8 +544,6 @@
   <div id="setupScreen" class="setup-screen">
     <h2>Start New Challenge</h2>
     <div class="setup-subtitle">Let's play together, my love 💕</div>
-
-    <div id="setupError" class="error-message" style="display: none;"></div>
 
     <div class="setup-section">
       <div class="setup-label">Challenge Duration</div>
@@ -576,7 +565,7 @@
       <!-- PORI (You) -->
       <div class="player-card you">
         <div id="youCompletion" class="completion-badge" style="display: none;">✨ COMPLETED ✨</div>
-
+        
         <div class="player-header">
           <div class="player-emoji">💙</div>
           <div class="player-info">
@@ -612,12 +601,12 @@
             <div class="progress-fill" id="yourProgress" style="width: 0%"></div>
           </div>
         </div>
-      </div>
+      </card>
 
       <!-- LUCUSKA (Her) -->
       <div class="player-card her">
         <div id="herCompletion" class="completion-badge" style="display: none;">✨ COMPLETED ✨</div>
-
+        
         <div class="player-header">
           <div class="player-emoji">🌹</div>
           <div class="player-info">
@@ -684,9 +673,21 @@
 </div>
 
 <script>
-// ===== CLOUDINARY CONFIGURATION =====
-const CLOUDINARY_CLOUD_NAME = "ds2d4k0lq";
-const CLOUDINARY_UPLOAD_PRESET = "color_hunt";
+// ===== APPWRITE CONFIGURATION =====
+// Replace with YOUR Appwrite details
+const APPWRITE_ENDPOINT = 'https://cloud.appwrite.io/v1'; // e.g., https://cloud.appwrite.io/v1
+const APPWRITE_PROJECT_ID = '6a1de77a003d5486c5cb';
+const APPWRITE_DATABASE_ID = '6a1de7b6002d2779e181';
+const APPWRITE_PHOTOS_COLLECTION = 'photos';
+const APPWRITE_CHALLENGES_COLLECTION = 'challenges';
+
+// Initialize Appwrite
+const { Client, Databases, ID, Query } = window.Appwrite;
+const client = new Client()
+  .setEndpoint(APPWRITE_ENDPOINT)
+  .setProject(APPWRITE_PROJECT_ID);
+
+const databases = new Databases(client);
 
 // ===== Colors Palette =====
 const colors = [
@@ -715,8 +716,7 @@ let gameState = {
   startTime: null,
   yourPhotos: [],
   herPhotos: [],
-  targetPhotosPerPlayer: 5,
-  totalTargetPhotos: 9,
+  targetPhotos: 5,
   timerInterval: null
 };
 
@@ -733,47 +733,51 @@ function getUniqueColors() {
   return { color1, color2 };
 }
 
-function saveGame() {
-  localStorage.setItem('colorHuntGame', JSON.stringify({
-    challengeId: gameState.challengeId,
-    startTime: gameState.startTime,
-    duration: gameState.duration,
-    yourColor: gameState.yourColor,
-    herColor: gameState.herColor,
-    totalTargetPhotos: gameState.totalTargetPhotos,
-    targetPhotosPerPlayer: gameState.targetPhotosPerPlayer
-  }));
-}
+async function startChallenge() {
+  try {
+    const duration = parseInt(document.getElementById('duration').value);
+    const { color1, color2 } = getUniqueColors();
 
-function startChallenge() {
-  const duration = parseInt(document.getElementById('duration').value);
+    gameState.yourColor = color1;
+    gameState.herColor = color2;
+    gameState.duration = duration;
+    gameState.startTime = Date.now();
+    gameState.challengeId = 'challenge_' + Date.now();
+    gameState.yourPhotos = [];
+    gameState.herPhotos = [];
 
-  const { color1, color2 } = getUniqueColors();
+    // Save challenge to Appwrite
+    await databases.createDocument(
+      APPWRITE_DATABASE_ID,
+      APPWRITE_CHALLENGES_COLLECTION,
+      gameState.challengeId,
+      {
+        startTime: gameState.startTime,
+        duration: duration,
+        yourColor: gameState.yourColor.hex,
+        herColor: gameState.herColor.hex,
+        yourColorName: gameState.yourColor.name,
+        herColorName: gameState.herColor.name,
+        createdAt: new Date().toISOString()
+      }
+    );
 
-  gameState.yourColor = color1;
-  gameState.herColor = color2;
-  gameState.duration = duration;
-  gameState.startTime = Date.now();
-  gameState.challengeId = 'pori_lucuska_' + Date.now();
-  gameState.yourPhotos = [];
-  gameState.herPhotos = [];
+    document.getElementById('setupScreen').style.display = 'none';
+    document.getElementById('gameScreen').style.display = 'block';
 
-  saveGame();
+    displayColors();
+    startTimer();
+    listenToPhotosRealtime();
 
-  document.getElementById('setupScreen').style.display = 'none';
-  document.getElementById('gameScreen').style.display = 'block';
-
-  displayColors();
-  startTimer();
-  loadPhotos();
-
-  document.getElementById('yourPhoto').addEventListener('change', (e) => uploadPhoto(e, 'your'));
-  document.getElementById('herPhoto').addEventListener('change', (e) => uploadPhoto(e, 'her'));
+    document.getElementById('yourPhoto').addEventListener('change', (e) => uploadPhoto(e, 'your'));
+    document.getElementById('herPhoto').addEventListener('change', (e) => uploadPhoto(e, 'her'));
+  } catch (error) {
+    console.error('Error starting challenge:', error);
+    alert('Error starting challenge: ' + error.message);
+  }
 }
 
 function displayColors() {
-  if (!gameState.yourColor || !gameState.herColor) return;
-
   const yourColorEl = document.getElementById('yourColor');
   const herColorEl = document.getElementById('herColor');
 
@@ -788,7 +792,7 @@ function displayColors() {
 
 function startTimer() {
   if (gameState.timerInterval) clearInterval(gameState.timerInterval);
-
+  
   gameState.timerInterval = setInterval(() => {
     const elapsed = Date.now() - gameState.startTime;
     const remaining = Math.max(0, gameState.duration * 1000 - elapsed);
@@ -819,97 +823,115 @@ function startTimer() {
       herTimerEl.classList.add('warning');
     }
 
-    // IMPORTANT: do NOT auto-end the challenge.
-    // When time hits 0, just stop the timer but keep the session.
     if (remaining === 0) {
-      clearInterval(gameState.timerInterval);
+      alert('⏰ Time\'s up! Our challenge has ended! 💕');
+      endChallenge();
     }
   }, 1000);
 }
 
-function uploadPhoto(event, player) {
+async function uploadPhoto(event, player) {
   const file = event.target.files[0];
   if (!file) return;
 
+  // Check file size (max 5MB for base64)
+  if (file.size > 5000000) {
+    alert('File too large! Max 5MB.');
+    return;
+  }
+
   const statusEl = player === 'your' ? document.getElementById('yourStatus') : document.getElementById('herStatus');
-  const uploadBtn = player === 'your'
-    ? document.getElementById('yourPhoto').parentElement.querySelector('.upload-btn')
-    : document.getElementById('herPhoto').parentElement.querySelector('.upload-btn');
+  const uploadBtn = player === 'your' ? document.getElementById('yourPhoto').parentElement.querySelector('.upload-btn') : document.getElementById('herPhoto').parentElement.querySelector('.upload-btn');
 
   statusEl.textContent = '⏳ Uploading your moment...';
   statusEl.classList.add('uploading');
-  statusEl.classList.remove('error', 'success');
   uploadBtn.disabled = true;
 
-  const formData = new FormData();
-  formData.append('file', file);
-  formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-  // Simple public_id to avoid folder issues
-  formData.append('public_id', `${gameState.challengeId}_${player}_${Date.now()}`);
+  try {
+    const reader = new FileReader();
+    
+    reader.onload = async function(e) {
+      try {
+        const base64Data = e.target.result;
 
-  fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, {
-    method: 'POST',
-    body: formData
-  })
-  .then(response => response.json())
-  .then(data => {
-    if (data.secure_url) {
-      const photoData = {
-        url: data.secure_url,
-        timestamp: Date.now(),
-        fileName: file.name
-      };
+        // Save to Appwrite
+        await databases.createDocument(
+          APPWRITE_DATABASE_ID,
+          APPWRITE_PHOTOS_COLLECTION,
+          ID.unique(),
+          {
+            challengeId: gameState.challengeId,
+            player: player,
+            imageData: base64Data,
+            fileName: file.name,
+            timestamp: Date.now()
+          }
+        );
 
-      if (player === 'your') {
-        gameState.yourPhotos.push(photoData);
-        localStorage.setItem(`colorHunt_yourPhotos_${gameState.challengeId}`, JSON.stringify(gameState.yourPhotos));
-      } else {
-        gameState.herPhotos.push(photoData);
-        localStorage.setItem(`colorHunt_herPhotos_${gameState.challengeId}`, JSON.stringify(gameState.herPhotos));
-      }
+        statusEl.textContent = '✓ Photo uploaded! 💕';
+        statusEl.classList.remove('uploading');
+        statusEl.classList.add('success');
 
-      statusEl.textContent = '✓ Photo uploaded! 💕';
-      statusEl.classList.remove('uploading', 'error');
-      statusEl.classList.add('success');
+        setTimeout(() => {
+          statusEl.textContent = 'Ready to upload';
+          statusEl.classList.remove('success');
+          uploadBtn.disabled = false;
+        }, 2000);
 
-      setTimeout(() => {
-        statusEl.textContent = 'Ready to upload';
-        statusEl.classList.remove('success');
+        event.target.value = '';
+        listenToPhotosRealtime();
+      } catch (error) {
+        console.error('Save error:', error);
+        statusEl.textContent = '❌ Save failed';
+        statusEl.classList.remove('uploading');
+        statusEl.classList.add('error');
         uploadBtn.disabled = false;
-      }, 2000);
+      }
+    };
 
-      event.target.value = '';
-      renderPhotos(player);
-      updateStats();
-    } else {
-      throw new Error('Upload failed');
-    }
-  })
-  .catch(error => {
+    reader.readAsDataURL(file);
+  } catch (error) {
     console.error('Upload error:', error);
-    statusEl.textContent = '❌ Upload failed. Try again';
-    statusEl.classList.remove('uploading', 'success');
+    statusEl.textContent = '❌ Upload failed';
+    statusEl.classList.remove('uploading');
     statusEl.classList.add('error');
     uploadBtn.disabled = false;
-  });
+  }
 }
 
-function loadPhotos() {
-  if (!gameState.challengeId) return;
+async function listenToPhotosRealtime() {
+  try {
+    // Load your photos
+    const yourPhotosResponse = await databases.listDocuments(
+      APPWRITE_DATABASE_ID,
+      APPWRITE_PHOTOS_COLLECTION,
+      [
+        Query.equal('challengeId', gameState.challengeId),
+        Query.equal('player', 'your')
+      ]
+    );
+    gameState.yourPhotos = yourPhotosResponse.documents;
+    renderPhotos('your');
 
-  const savedYourPhotos = localStorage.getItem(`colorHunt_yourPhotos_${gameState.challengeId}`);
-  const savedHerPhotos = localStorage.getItem(`colorHunt_herPhotos_${gameState.challengeId}`);
+    // Load her photos
+    const herPhotosResponse = await databases.listDocuments(
+      APPWRITE_DATABASE_ID,
+      APPWRITE_PHOTOS_COLLECTION,
+      [
+        Query.equal('challengeId', gameState.challengeId),
+        Query.equal('player', 'her')
+      ]
+    );
+    gameState.herPhotos = herPhotosResponse.documents;
+    renderPhotos('her');
 
-  if (savedYourPhotos) {
-    gameState.yourPhotos = JSON.parse(savedYourPhotos);
+    updateStats();
+
+    // Poll every 2 seconds for real-time updates
+    setTimeout(listenToPhotosRealtime, 2000);
+  } catch (error) {
+    console.error('Error loading photos:', error);
   }
-  if (savedHerPhotos) {
-    gameState.herPhotos = JSON.parse(savedHerPhotos);
-  }
-
-  renderPhotos('your');
-  renderPhotos('her');
-  updateStats();
 }
 
 function renderPhotos(player) {
@@ -921,26 +943,25 @@ function renderPhotos(player) {
 
   const grid = document.getElementById(gridId);
   grid.innerHTML = photos.map(photo => `
-    <div class="photo-item" onclick="showModal('${photo.url}')">
-      <img src="${photo.url}" alt="Photo" loading="lazy">
+    <div class="photo-item" onclick="showModal('${photo.imageData}')">
+      <img src="${photo.imageData}" alt="Photo" loading="lazy">
     </div>
   `).join('');
 
   document.getElementById(countId).textContent = `${photos.length} photo${photos.length !== 1 ? 's' : ''}`;
 
-  const progress = (photos.length / gameState.targetPhotosPerPlayer) * 100;
+  const progress = (photos.length / gameState.targetPhotos) * 100;
   document.getElementById(progressId).style.width = Math.min(100, progress) + '%';
 
-  if (photos.length >= gameState.targetPhotosPerPlayer) {
+  if (photos.length >= gameState.targetPhotos) {
     document.getElementById(completionId).style.display = 'block';
-  } else {
-    document.getElementById(completionId).style.display = 'none';
   }
 }
 
 function updateStats() {
   const total = gameState.yourPhotos.length + gameState.herPhotos.length;
-  const completion = Math.round((total / gameState.totalTargetPhotos) * 100);
+  const target = gameState.targetPhotos * 2;
+  const completion = Math.round((total / target) * 100);
 
   document.getElementById('totalPhotos').textContent = total;
   document.getElementById('completion').textContent = Math.min(100, completion) + '%';
@@ -961,56 +982,80 @@ document.getElementById('imageModal').addEventListener('click', function(e) {
   }
 });
 
-function endChallenge() {
-  if (confirm('Are you sure you want to end this challenge? All photos will be deleted when you start a new one. 💕')) {
+async function endChallenge() {
+  if (confirm('Are you sure you want to end this challenge? All photos will be deleted. 💕')) {
     if (gameState.timerInterval) clearInterval(gameState.timerInterval);
 
-    localStorage.removeItem('colorHuntGame');
-    if (gameState.challengeId) {
-      localStorage.removeItem(`colorHunt_yourPhotos_${gameState.challengeId}`);
-      localStorage.removeItem(`colorHunt_herPhotos_${gameState.challengeId}`);
+    try {
+      // Delete all photos
+      const photoDocs = await databases.listDocuments(
+        APPWRITE_DATABASE_ID,
+        APPWRITE_PHOTOS_COLLECTION,
+        [Query.equal('challengeId', gameState.challengeId)]
+      );
+
+      for (let photo of photoDocs.documents) {
+        await databases.deleteDocument(APPWRITE_DATABASE_ID, APPWRITE_PHOTOS_COLLECTION, photo.$id);
+      }
+
+      // Delete challenge
+      await databases.deleteDocument(APPWRITE_DATABASE_ID, APPWRITE_CHALLENGES_COLLECTION, gameState.challengeId);
+
+      document.getElementById('setupScreen').style.display = 'block';
+      document.getElementById('gameScreen').style.display = 'none';
+      
+      gameState = {
+        challengeId: null,
+        yourColor: null,
+        herColor: null,
+        duration: 86400,
+        startTime: null,
+        yourPhotos: [],
+        herPhotos: [],
+        targetPhotos: 5,
+        timerInterval: null
+      };
+    } catch (error) {
+      console.error('Error ending challenge:', error);
+      alert('Error ending challenge');
     }
-
-    document.getElementById('setupScreen').style.display = 'block';
-    document.getElementById('gameScreen').style.display = 'none';
-
-    gameState = {
-      challengeId: null,
-      yourColor: null,
-      herColor: null,
-      duration: 86400,
-      startTime: null,
-      yourPhotos: [],
-      herPhotos: [],
-      targetPhotosPerPlayer: 5,
-      totalTargetPhotos: 9,
-      timerInterval: null
-    };
   }
 }
 
-// Load game if already in progress
-window.addEventListener('load', () => {
-  const savedGame = localStorage.getItem('colorHuntGame');
-  if (savedGame) {
-    const saved = JSON.parse(savedGame);
-    const elapsed = Date.now() - saved.startTime;
+// Load game on page load
+window.addEventListener('load', async () => {
+  try {
+    // Try to find an active challenge
+    const challengesResponse = await databases.listDocuments(
+      APPWRITE_DATABASE_ID,
+      APPWRITE_CHALLENGES_COLLECTION
+    );
 
-    // Even if time is over, we still restore the session.
-    gameState = {
-      ...gameState,
-      ...saved
-    };
+    if (challengesResponse.documents.length > 0) {
+      const latestChallenge = challengesResponse.documents[0];
+      const elapsed = Date.now() - latestChallenge.startTime;
 
-    document.getElementById('setupScreen').style.display = 'none';
-    document.getElementById('gameScreen').style.display = 'block';
+      if (elapsed < latestChallenge.duration * 1000) {
+        // Challenge still active
+        gameState.challengeId = latestChallenge.$id;
+        gameState.startTime = latestChallenge.startTime;
+        gameState.duration = latestChallenge.duration;
+        gameState.yourColor = { name: latestChallenge.yourColorName, hex: latestChallenge.yourColor };
+        gameState.herColor = { name: latestChallenge.herColorName, hex: latestChallenge.herColor };
 
-    displayColors();
-    loadPhotos();
-    startTimer();
+        document.getElementById('setupScreen').style.display = 'none';
+        document.getElementById('gameScreen').style.display = 'block';
 
-    document.getElementById('yourPhoto').addEventListener('change', (e) => uploadPhoto(e, 'your'));
-    document.getElementById('herPhoto').addEventListener('change', (e) => uploadPhoto(e, 'her'));
+        displayColors();
+        startTimer();
+        listenToPhotosRealtime();
+
+        document.getElementById('yourPhoto').addEventListener('change', (e) => uploadPhoto(e, 'your'));
+        document.getElementById('herPhoto').addEventListener('change', (e) => uploadPhoto(e, 'her'));
+      }
+    }
+  } catch (error) {
+    console.error('Error loading game:', error);
   }
 });
 </script>
