@@ -1,0 +1,1019 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>💕 Color Hunt - Pori & Lucuska 💕</title>
+  <script src="https://upload-widget.cloudinary.com/latest/CloudinaryUploadWidget.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #ff6b9d 0%, #c44569 50%, #ffa07a 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .header {
+      text-align: center;
+      color: white;
+      margin-bottom: 30px;
+    }
+
+    .header h1 {
+      font-size: 3rem;
+      margin-bottom: 10px;
+      text-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+      letter-spacing: 2px;
+    }
+
+    .header-subtitle {
+      font-size: 1.2rem;
+      margin-bottom: 5px;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+      font-style: italic;
+    }
+
+    .header-tagline {
+      font-size: 0.95rem;
+      opacity: 0.95;
+    }
+
+    .setup-screen {
+      background: white;
+      border-radius: 20px;
+      padding: 50px 40px;
+      box-shadow: 0 15px 40px rgba(0, 0, 0, 0.2);
+      max-width: 700px;
+      margin: 0 auto;
+      border: 3px solid #ff6b9d;
+    }
+
+    .setup-screen h2 {
+      font-size: 2rem;
+      color: #c44569;
+      margin-bottom: 10px;
+      text-align: center;
+    }
+
+    .setup-subtitle {
+      text-align: center;
+      color: #999;
+      margin-bottom: 30px;
+      font-size: 0.95rem;
+    }
+
+    .setup-section {
+      margin-bottom: 25px;
+    }
+
+    .setup-label {
+      font-size: 1rem;
+      color: #666;
+      margin-bottom: 10px;
+      font-weight: 600;
+    }
+
+    input[type="text"],
+    select {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #ffb3d9;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-family: inherit;
+      margin-bottom: 10px;
+      transition: all 0.3s;
+    }
+
+    input[type="text"]:focus,
+    select:focus {
+      outline: none;
+      border-color: #ff6b9d;
+      box-shadow: 0 0 0 3px rgba(255, 107, 157, 0.1);
+    }
+
+    .button {
+      width: 100%;
+      padding: 15px;
+      background: linear-gradient(135deg, #ff6b9d, #c44569);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 1.1rem;
+      transition: all 0.3s;
+      margin-top: 10px;
+    }
+
+    .button:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 20px rgba(255, 107, 157, 0.4);
+    }
+
+    .button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .game-screen {
+      display: none;
+    }
+
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 25px;
+      margin-bottom: 30px;
+    }
+
+    .player-card {
+      background: white;
+      border-radius: 20px;
+      padding: 30px;
+      box-shadow: 0 15px 40px rgba(0, 0, 0, 0.15);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .player-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 5px;
+      background: linear-gradient(90deg, #ff6b9d, #c44569);
+    }
+
+    .player-card.you::before {
+      background: linear-gradient(90deg, #ff6b9d, #ff8fab);
+    }
+
+    .player-card.her::before {
+      background: linear-gradient(90deg, #ffa07a, #ff8c6b);
+    }
+
+    .player-header {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 2px solid #ffe0ed;
+    }
+
+    .player-emoji {
+      font-size: 3rem;
+    }
+
+    .player-info h2 {
+      font-size: 1.8rem;
+      color: #c44569;
+      margin-bottom: 5px;
+    }
+
+    .player-nickname {
+      font-size: 0.95rem;
+      color: #ff6b9d;
+      font-style: italic;
+      font-weight: 600;
+    }
+
+    .color-section {
+      margin-bottom: 25px;
+    }
+
+    .color-label {
+      font-size: 0.8rem;
+      color: #999;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      margin-bottom: 10px;
+      font-weight: 700;
+    }
+
+    .color-display {
+      width: 100%;
+      height: 160px;
+      border-radius: 15px;
+      margin-bottom: 12px;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+      border: 3px solid #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+      font-size: 1.2rem;
+      text-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
+    }
+
+    .color-code {
+      font-family: 'Courier New', monospace;
+      font-size: 0.9rem;
+      color: #ff6b9d;
+      font-weight: 600;
+      text-align: center;
+    }
+
+    .timer-section {
+      background: linear-gradient(135deg, #ffe0ed, #fff0f5);
+      border-radius: 12px;
+      padding: 15px;
+      margin-bottom: 20px;
+      text-align: center;
+      border: 2px solid #ffb3d9;
+    }
+
+    .timer-label {
+      font-size: 0.75rem;
+      color: #999;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+      font-weight: 700;
+    }
+
+    .timer {
+      font-size: 2.2rem;
+      font-weight: bold;
+      color: #ff6b9d;
+      font-family: 'Courier New', monospace;
+      line-height: 1;
+    }
+
+    .timer.warning {
+      color: #ff9500;
+    }
+
+    .timer.danger {
+      color: #ff4444;
+    }
+
+    .upload-section {
+      margin-bottom: 20px;
+    }
+
+    .file-input-wrapper input[type=file] {
+      display: none;
+    }
+
+    .upload-btn {
+      width: 100%;
+      padding: 12px;
+      background: linear-gradient(135deg, #ff6b9d, #c44569);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 1rem;
+      transition: all 0.3s;
+      margin-bottom: 10px;
+    }
+
+    .upload-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(255, 107, 157, 0.4);
+    }
+
+    .upload-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .upload-status {
+      font-size: 0.9rem;
+      color: #999;
+      text-align: center;
+      min-height: 20px;
+    }
+
+    .upload-status.uploading {
+      color: #ff6b9d;
+      font-weight: 600;
+    }
+
+    .upload-status.success {
+      color: #27ae60;
+      font-weight: 600;
+    }
+
+    .upload-status.error {
+      color: #ff4444;
+      font-weight: 600;
+    }
+
+    .photos-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-top: 15px;
+    }
+
+    .photo-item {
+      position: relative;
+      padding-bottom: 100%;
+      background: #f0f0f0;
+      border-radius: 12px;
+      overflow: hidden;
+      cursor: pointer;
+      border: 3px solid #ffe0ed;
+      transition: all 0.3s;
+    }
+
+    .photo-item:hover {
+      border-color: #ff6b9d;
+      box-shadow: 0 5px 15px rgba(255, 107, 157, 0.3);
+      transform: scale(1.05);
+    }
+
+    .photo-item img {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .photo-count {
+      display: inline-block;
+      background: linear-gradient(135deg, #ff6b9d, #c44569);
+      color: white;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      margin-top: 12px;
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 8px;
+      background: #ffe0ed;
+      border-radius: 10px;
+      overflow: hidden;
+      margin-top: 10px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #ff6b9d, #c44569);
+      transition: width 0.3s ease;
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.85);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal.show {
+      display: flex;
+    }
+
+    .modal-content {
+      background: white;
+      border-radius: 20px;
+      padding: 0;
+      max-width: 650px;
+      width: 90%;
+      overflow: hidden;
+      position: relative;
+      border: 4px solid #ff6b9d;
+    }
+
+    .modal-image {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    .close-modal {
+      font-size: 2.5rem;
+      color: white;
+      cursor: pointer;
+      position: absolute;
+      top: 15px;
+      right: 20px;
+      background: rgba(0, 0, 0, 0.6);
+      border-radius: 50%;
+      width: 45px;
+      height: 45px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+      transition: all 0.3s;
+    }
+
+    .close-modal:hover {
+      background: rgba(0, 0, 0, 0.9);
+    }
+
+    .stats {
+      background: white;
+      border-radius: 20px;
+      padding: 30px;
+      box-shadow: 0 15px 40px rgba(0, 0, 0, 0.15);
+      margin-bottom: 30px;
+      border-top: 5px solid #ff6b9d;
+    }
+
+    .stats-title {
+      font-size: 1.4rem;
+      color: #c44569;
+      margin-bottom: 25px;
+      text-align: center;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+    }
+
+    .stat-box {
+      text-align: center;
+      padding: 15px;
+      background: linear-gradient(135deg, #ffe0ed, #fff0f5);
+      border-radius: 12px;
+      border: 2px solid #ffb3d9;
+    }
+
+    .stat-number {
+      font-size: 2.8rem;
+      font-weight: bold;
+      color: #ff6b9d;
+      margin-bottom: 8px;
+    }
+
+    .stat-label {
+      font-size: 0.85rem;
+      color: #999;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+
+    .end-challenge-btn {
+      width: 100%;
+      padding: 15px;
+      background: #ff4444;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 1rem;
+      transition: all 0.3s;
+      margin-top: 20px;
+    }
+
+    .end-challenge-btn:hover {
+      background: #ff2222;
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(255, 68, 68, 0.4);
+    }
+
+    .completion-badge {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: linear-gradient(135deg, #27ae60, #2ecc71);
+      color: white;
+      padding: 10px 15px;
+      border-radius: 25px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    @media (max-width: 900px) {
+      .main-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .header h1 {
+        font-size: 2rem;
+      }
+
+      .photos-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    .error-message {
+      background: #ffebee;
+      border-left: 4px solid #ff4444;
+      padding: 15px;
+      border-radius: 8px;
+      color: #c62828;
+      margin-bottom: 15px;
+    }
+
+    .love-text {
+      text-align: center;
+      color: #ff6b9d;
+      font-style: italic;
+      margin-top: 20px;
+      font-size: 0.95rem;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="header">
+    <h1>💕 COLOR HUNT 💕</h1>
+    <div class="header-subtitle">Pori & Lucuska's Challenge</div>
+    <div class="header-tagline">A game of love, colors, and memories together ✨</div>
+  </div>
+
+  <!-- SETUP SCREEN -->
+  <div id="setupScreen" class="setup-screen">
+    <h2>Start New Challenge</h2>
+    <div class="setup-subtitle">Let's play together, my love 💕</div>
+
+    <div id="setupError" class="error-message" style="display: none;"></div>
+
+    <div class="setup-section">
+      <div class="setup-label">Challenge Duration</div>
+      <select id="duration">
+        <option value="3600">1 Hour</option>
+        <option value="86400" selected>24 Hours</option>
+        <option value="259200">3 Days</option>
+        <option value="604800">1 Week</option>
+      </select>
+    </div>
+
+    <button class="button" onclick="startChallenge()">🎉 Start Our Challenge 🎉</button>
+    <div class="love-text">Every color is a moment we share together ✨</div>
+  </div>
+
+  <!-- GAME SCREEN -->
+  <div id="gameScreen" class="game-screen">
+    <div class="main-grid">
+      <!-- PORI (You) -->
+      <div class="player-card you">
+        <div id="youCompletion" class="completion-badge" style="display: none;">✨ COMPLETED ✨</div>
+
+        <div class="player-header">
+          <div class="player-emoji">💙</div>
+          <div class="player-info">
+            <h2>Allister</h2>
+            <div class="player-nickname">(Pori)</div>
+          </div>
+        </div>
+
+        <div class="timer-section">
+          <div class="timer-label">⏱️ Time Remaining</div>
+          <div class="timer" id="yourTimer">24:00:00</div>
+        </div>
+
+        <div class="color-section">
+          <div class="color-label">🎨 Your Color</div>
+          <div class="color-display" id="yourColor"></div>
+          <div class="color-code" id="yourColorCode"></div>
+        </div>
+
+        <div class="upload-section">
+          <div class="file-input-wrapper">
+            <label for="yourPhoto" class="upload-btn">📸 Upload A Moment</label>
+            <input type="file" id="yourPhoto" accept="image/*">
+          </div>
+          <div class="upload-status" id="yourStatus">Ready to upload</div>
+        </div>
+
+        <div style="margin-top: 15px;">
+          <strong style="color: #c44569;">💙 Your Collection:</strong>
+          <div class="photos-grid" id="yourPhotos"></div>
+          <div class="photo-count" id="yourCount">0 photos</div>
+          <div class="progress-bar">
+            <div class="progress-fill" id="yourProgress" style="width: 0%"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LUCUSKA (Her) -->
+      <div class="player-card her">
+        <div id="herCompletion" class="completion-badge" style="display: none;">✨ COMPLETED ✨</div>
+
+        <div class="player-header">
+          <div class="player-emoji">🌹</div>
+          <div class="player-info">
+            <h2>Luca</h2>
+            <div class="player-nickname">(Lucuska)</div>
+          </div>
+        </div>
+
+        <div class="timer-section">
+          <div class="timer-label">⏱️ Time Remaining</div>
+          <div class="timer" id="herTimer">24:00:00</div>
+        </div>
+
+        <div class="color-section">
+          <div class="color-label">🎨 Your Color</div>
+          <div class="color-display" id="herColor"></div>
+          <div class="color-code" id="herColorCode"></div>
+        </div>
+
+        <div class="upload-section">
+          <div class="file-input-wrapper">
+            <label for="herPhoto" class="upload-btn">📸 Upload A Moment</label>
+            <input type="file" id="herPhoto" accept="image/*">
+          </div>
+          <div class="upload-status" id="herStatus">Ready to upload</div>
+        </div>
+
+        <div style="margin-top: 15px;">
+          <strong style="color: #c44569;">🌹 Your Collection:</strong>
+          <div class="photos-grid" id="herPhotos"></div>
+          <div class="photo-count" id="herCount">0 photos</div>
+          <div class="progress-bar">
+            <div class="progress-fill" id="herProgress" style="width: 0%"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats">
+      <div class="stats-title">💑 Our Challenge Progress</div>
+      <div class="stats-grid">
+        <div class="stat-box">
+          <div class="stat-number" id="totalPhotos">0</div>
+          <div class="stat-label">💕 Total Memories</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-number" id="completion">0%</div>
+          <div class="stat-label">✨ Overall Progress</div>
+        </div>
+      </div>
+      <button class="end-challenge-btn" onclick="endChallenge()">🔄 End & Start New Challenge</button>
+      <div class="love-text">Every photo is a proof of our love 💕</div>
+    </div>
+  </div>
+</div>
+
+<!-- Image Modal -->
+<div class="modal" id="imageModal">
+  <span class="close-modal" onclick="closeModal()">&times;</span>
+  <div class="modal-content">
+    <img class="modal-image" id="modalImage" src="" alt="">
+  </div>
+</div>
+
+<script>
+// ===== CLOUDINARY CONFIGURATION =====
+const CLOUDINARY_CLOUD_NAME = "ds2d4k0lq";
+const CLOUDINARY_UPLOAD_PRESET = "color_hunt";
+
+// ===== Colors Palette =====
+const colors = [
+  { name: 'Crimson Red', hex: '#DC143C' },
+  { name: 'Ocean Blue', hex: '#0077BE' },
+  { name: 'Forest Green', hex: '#1B4332' },
+  { name: 'Golden Yellow', hex: '#FFD700' },
+  { name: 'Purple Iris', hex: '#5A189A' },
+  { name: 'Coral Pink', hex: '#FF7F50' },
+  { name: 'Midnight Navy', hex: '#001C3D' },
+  { name: 'Lime Green', hex: '#32CD32' },
+  { name: 'Burnt Orange', hex: '#CC5500' },
+  { name: 'Turquoise', hex: '#40E0D0' },
+  { name: 'Deep Magenta', hex: '#8B008B' },
+  { name: 'Sunny Yellow', hex: '#FFEB3B' },
+  { name: 'Sky Blue', hex: '#87CEEB' },
+  { name: 'Rose Pink', hex: '#FF69B4' },
+  { name: 'Sage Green', hex: '#9DC183' }
+];
+
+let gameState = {
+  challengeId: null,
+  yourColor: null,
+  herColor: null,
+  duration: 86400,
+  startTime: null,
+  yourPhotos: [],
+  herPhotos: [],
+  targetPhotosPerPlayer: 5,
+  totalTargetPhotos: 9,
+  timerInterval: null
+};
+
+function getRandomColor() {
+  return colors[Math.floor(Math.random() * colors.length)];
+}
+
+function getUniqueColors() {
+  let color1 = getRandomColor();
+  let color2 = getRandomColor();
+  while (color2.hex === color1.hex) {
+    color2 = getRandomColor();
+  }
+  return { color1, color2 };
+}
+
+function saveGame() {
+  localStorage.setItem('colorHuntGame', JSON.stringify({
+    challengeId: gameState.challengeId,
+    startTime: gameState.startTime,
+    duration: gameState.duration,
+    yourColor: gameState.yourColor,
+    herColor: gameState.herColor,
+    totalTargetPhotos: gameState.totalTargetPhotos,
+    targetPhotosPerPlayer: gameState.targetPhotosPerPlayer
+  }));
+}
+
+function startChallenge() {
+  const duration = parseInt(document.getElementById('duration').value);
+
+  const { color1, color2 } = getUniqueColors();
+
+  gameState.yourColor = color1;
+  gameState.herColor = color2;
+  gameState.duration = duration;
+  gameState.startTime = Date.now();
+  gameState.challengeId = 'pori_lucuska_' + Date.now();
+  gameState.yourPhotos = [];
+  gameState.herPhotos = [];
+
+  saveGame();
+
+  document.getElementById('setupScreen').style.display = 'none';
+  document.getElementById('gameScreen').style.display = 'block';
+
+  displayColors();
+  startTimer();
+  loadPhotos();
+
+  document.getElementById('yourPhoto').addEventListener('change', (e) => uploadPhoto(e, 'your'));
+  document.getElementById('herPhoto').addEventListener('change', (e) => uploadPhoto(e, 'her'));
+}
+
+function displayColors() {
+  if (!gameState.yourColor || !gameState.herColor) return;
+
+  const yourColorEl = document.getElementById('yourColor');
+  const herColorEl = document.getElementById('herColor');
+
+  yourColorEl.style.backgroundColor = gameState.yourColor.hex;
+  yourColorEl.textContent = gameState.yourColor.name;
+  document.getElementById('yourColorCode').textContent = gameState.yourColor.hex;
+
+  herColorEl.style.backgroundColor = gameState.herColor.hex;
+  herColorEl.textContent = gameState.herColor.name;
+  document.getElementById('herColorCode').textContent = gameState.herColor.hex;
+}
+
+function startTimer() {
+  if (gameState.timerInterval) clearInterval(gameState.timerInterval);
+
+  gameState.timerInterval = setInterval(() => {
+    const elapsed = Date.now() - gameState.startTime;
+    const remaining = Math.max(0, gameState.duration * 1000 - elapsed);
+
+    const hours = Math.floor(remaining / (60 * 60 * 1000));
+    const minutes = Math.floor((remaining % (60 * 60 * 1000)) / (60 * 1000));
+    const seconds = Math.floor((remaining % (60 * 1000)) / 1000);
+
+    const timeString = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
+    document.getElementById('yourTimer').textContent = timeString;
+    document.getElementById('herTimer').textContent = timeString;
+
+    const yourTimerEl = document.getElementById('yourTimer');
+    const herTimerEl = document.getElementById('herTimer');
+
+    yourTimerEl.classList.remove('warning', 'danger');
+    herTimerEl.classList.remove('warning', 'danger');
+
+    const oneHour = 3600000;
+    const twoHours = 7200000;
+
+    if (remaining < oneHour) {
+      yourTimerEl.classList.add('danger');
+      herTimerEl.classList.add('danger');
+    } else if (remaining < twoHours) {
+      yourTimerEl.classList.add('warning');
+      herTimerEl.classList.add('warning');
+    }
+
+    // IMPORTANT: do NOT auto-end the challenge.
+    // When time hits 0, just stop the timer but keep the session.
+    if (remaining === 0) {
+      clearInterval(gameState.timerInterval);
+    }
+  }, 1000);
+}
+
+function uploadPhoto(event, player) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const statusEl = player === 'your' ? document.getElementById('yourStatus') : document.getElementById('herStatus');
+  const uploadBtn = player === 'your'
+    ? document.getElementById('yourPhoto').parentElement.querySelector('.upload-btn')
+    : document.getElementById('herPhoto').parentElement.querySelector('.upload-btn');
+
+  statusEl.textContent = '⏳ Uploading your moment...';
+  statusEl.classList.add('uploading');
+  statusEl.classList.remove('error', 'success');
+  uploadBtn.disabled = true;
+
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+  // Simple public_id to avoid folder issues
+  formData.append('public_id', `${gameState.challengeId}_${player}_${Date.now()}`);
+
+  fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, {
+    method: 'POST',
+    body: formData
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.secure_url) {
+      const photoData = {
+        url: data.secure_url,
+        timestamp: Date.now(),
+        fileName: file.name
+      };
+
+      if (player === 'your') {
+        gameState.yourPhotos.push(photoData);
+        localStorage.setItem(`colorHunt_yourPhotos_${gameState.challengeId}`, JSON.stringify(gameState.yourPhotos));
+      } else {
+        gameState.herPhotos.push(photoData);
+        localStorage.setItem(`colorHunt_herPhotos_${gameState.challengeId}`, JSON.stringify(gameState.herPhotos));
+      }
+
+      statusEl.textContent = '✓ Photo uploaded! 💕';
+      statusEl.classList.remove('uploading', 'error');
+      statusEl.classList.add('success');
+
+      setTimeout(() => {
+        statusEl.textContent = 'Ready to upload';
+        statusEl.classList.remove('success');
+        uploadBtn.disabled = false;
+      }, 2000);
+
+      event.target.value = '';
+      renderPhotos(player);
+      updateStats();
+    } else {
+      throw new Error('Upload failed');
+    }
+  })
+  .catch(error => {
+    console.error('Upload error:', error);
+    statusEl.textContent = '❌ Upload failed. Try again';
+    statusEl.classList.remove('uploading', 'success');
+    statusEl.classList.add('error');
+    uploadBtn.disabled = false;
+  });
+}
+
+function loadPhotos() {
+  if (!gameState.challengeId) return;
+
+  const savedYourPhotos = localStorage.getItem(`colorHunt_yourPhotos_${gameState.challengeId}`);
+  const savedHerPhotos = localStorage.getItem(`colorHunt_herPhotos_${gameState.challengeId}`);
+
+  if (savedYourPhotos) {
+    gameState.yourPhotos = JSON.parse(savedYourPhotos);
+  }
+  if (savedHerPhotos) {
+    gameState.herPhotos = JSON.parse(savedHerPhotos);
+  }
+
+  renderPhotos('your');
+  renderPhotos('her');
+  updateStats();
+}
+
+function renderPhotos(player) {
+  const photos = player === 'your' ? gameState.yourPhotos : gameState.herPhotos;
+  const gridId = player === 'your' ? 'yourPhotos' : 'herPhotos';
+  const countId = player === 'your' ? 'yourCount' : 'herCount';
+  const progressId = player === 'your' ? 'yourProgress' : 'herProgress';
+  const completionId = player === 'your' ? 'youCompletion' : 'herCompletion';
+
+  const grid = document.getElementById(gridId);
+  grid.innerHTML = photos.map(photo => `
+    <div class="photo-item" onclick="showModal('${photo.url}')">
+      <img src="${photo.url}" alt="Photo" loading="lazy">
+    </div>
+  `).join('');
+
+  document.getElementById(countId).textContent = `${photos.length} photo${photos.length !== 1 ? 's' : ''}`;
+
+  const progress = (photos.length / gameState.targetPhotosPerPlayer) * 100;
+  document.getElementById(progressId).style.width = Math.min(100, progress) + '%';
+
+  if (photos.length >= gameState.targetPhotosPerPlayer) {
+    document.getElementById(completionId).style.display = 'block';
+  } else {
+    document.getElementById(completionId).style.display = 'none';
+  }
+}
+
+function updateStats() {
+  const total = gameState.yourPhotos.length + gameState.herPhotos.length;
+  const completion = Math.round((total / gameState.totalTargetPhotos) * 100);
+
+  document.getElementById('totalPhotos').textContent = total;
+  document.getElementById('completion').textContent = Math.min(100, completion) + '%';
+}
+
+function showModal(imageSrc) {
+  document.getElementById('modalImage').src = imageSrc;
+  document.getElementById('imageModal').classList.add('show');
+}
+
+function closeModal() {
+  document.getElementById('imageModal').classList.remove('show');
+}
+
+document.getElementById('imageModal').addEventListener('click', function(e) {
+  if (e.target === this) {
+    closeModal();
+  }
+});
+
+function endChallenge() {
+  if (confirm('Are you sure you want to end this challenge? All photos will be deleted when you start a new one. 💕')) {
+    if (gameState.timerInterval) clearInterval(gameState.timerInterval);
+
+    localStorage.removeItem('colorHuntGame');
+    if (gameState.challengeId) {
+      localStorage.removeItem(`colorHunt_yourPhotos_${gameState.challengeId}`);
+      localStorage.removeItem(`colorHunt_herPhotos_${gameState.challengeId}`);
+    }
+
+    document.getElementById('setupScreen').style.display = 'block';
+    document.getElementById('gameScreen').style.display = 'none';
+
+    gameState = {
+      challengeId: null,
+      yourColor: null,
+      herColor: null,
+      duration: 86400,
+      startTime: null,
+      yourPhotos: [],
+      herPhotos: [],
+      targetPhotosPerPlayer: 5,
+      totalTargetPhotos: 9,
+      timerInterval: null
+    };
+  }
+}
+
+// Load game if already in progress
+window.addEventListener('load', () => {
+  const savedGame = localStorage.getItem('colorHuntGame');
+  if (savedGame) {
+    const saved = JSON.parse(savedGame);
+    const elapsed = Date.now() - saved.startTime;
+
+    // Even if time is over, we still restore the session.
+    gameState = {
+      ...gameState,
+      ...saved
+    };
+
+    document.getElementById('setupScreen').style.display = 'none';
+    document.getElementById('gameScreen').style.display = 'block';
+
+    displayColors();
+    loadPhotos();
+    startTimer();
+
+    document.getElementById('yourPhoto').addEventListener('change', (e) => uploadPhoto(e, 'your'));
+    document.getElementById('herPhoto').addEventListener('change', (e) => uploadPhoto(e, 'her'));
+  }
+});
+</script>
+
+</body>
+</html>
