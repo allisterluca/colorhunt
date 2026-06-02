@@ -1,54 +1,3 @@
-Thanks for pasting it! I found several real bugs. Let me explain them, then give you the fixed file.
-
-## What was broken
-
-1. **HTML bug** – you had `</card>` instead of `</div>` (closing Pori's card). This breaks the page structure.
-2. **Photos stored as base64 in the database** – this is unreliable and hits Appwrite's document size limits. The proper way is **Appwrite Storage** (file buckets). This is why upload "doesn't work."
-3. **Timer restart** – your startTime was saved as a raw number (`Date.now()` ≈ 1.7 trillion), which can overflow/fail in an Appwrite *Integer* field. I now store it as a **String** so it survives a refresh on both phones.
-4. **Polling explosion** – `listenToPhotosRealtime()` called itself with `setTimeout` AND was called from 3 places, spawning many overlapping loops. I replaced it with **Appwrite Realtime** (true live sync between phones).
-
----
-
-## ⚠️ First: set up Appwrite correctly (do this before testing)
-
-### 1. `challenges` collection — attributes
-| Key | Type | Size | Required |
-|---|---|---|---|
-| startTime | String | 30 | ✅ |
-| duration | Integer | – | ✅ |
-| yourColor | String | 20 | ✅ |
-| herColor | String | 20 | ✅ |
-| yourColorName | String | 50 | ✅ |
-| herColorName | String | 50 | ✅ |
-
-### 2. `photos` collection — attributes
-| Key | Type | Size | Required |
-|---|---|---|---|
-| challengeId | String | 50 | ✅ |
-| player | String | 10 | ✅ |
-| fileId | String | 50 | ✅ |
-| fileName | String | 255 | ❌ |
-| timestamp | String | 30 | ❌ |
-
-### 3. `photos` collection — **Indexes** (required for queries!)
-- Index on `challengeId` (key type)
-- Index on `player` (key type)
-
-### 4. Create a **Storage Bucket**
-- Go to **Storage → Create Bucket**
-- Set its **Bucket ID** to: `photos`
-- Set max file size high (e.g. 10MB)
-
-### 5. Permissions (since there's no login)
-On **both collections AND the bucket** → Settings → Permissions → add role **Any** with **Create, Read, Update, Delete**.
-
----
-
-## ✅ Fixed full file
-
-Replace your whole file with this (CSS unchanged, only the `</card>` fix + new JavaScript):
-
-```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -529,14 +478,3 @@ window.addEventListener('load', async () => {
 </script>
 </body>
 </html>
-```
-
----
-
-## Test checklist
-1. Make sure the **attributes, indexes, bucket, and permissions** above exist (most "doesn't work" issues come from a missing index or permission).
-2. Open the site on your phone → Start Challenge → upload a photo.
-3. Open it on her phone → the same challenge, timer, and photos appear live. 🎉
-4. Refresh either phone → timer keeps counting (no reset).
-
-If anything still errors, open the browser console, copy the **exact red error message**, and paste it here — I'll pinpoint it.
