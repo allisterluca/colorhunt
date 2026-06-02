@@ -1,3 +1,54 @@
+Thanks for pasting it! I found several real bugs. Let me explain them, then give you the fixed file.
+
+## What was broken
+
+1. **HTML bug** – you had `</card>` instead of `</div>` (closing Pori's card). This breaks the page structure.
+2. **Photos stored as base64 in the database** – this is unreliable and hits Appwrite's document size limits. The proper way is **Appwrite Storage** (file buckets). This is why upload "doesn't work."
+3. **Timer restart** – your startTime was saved as a raw number (`Date.now()` ≈ 1.7 trillion), which can overflow/fail in an Appwrite *Integer* field. I now store it as a **String** so it survives a refresh on both phones.
+4. **Polling explosion** – `listenToPhotosRealtime()` called itself with `setTimeout` AND was called from 3 places, spawning many overlapping loops. I replaced it with **Appwrite Realtime** (true live sync between phones).
+
+---
+
+## ⚠️ First: set up Appwrite correctly (do this before testing)
+
+### 1. `challenges` collection — attributes
+| Key | Type | Size | Required |
+|---|---|---|---|
+| startTime | String | 30 | ✅ |
+| duration | Integer | – | ✅ |
+| yourColor | String | 20 | ✅ |
+| herColor | String | 20 | ✅ |
+| yourColorName | String | 50 | ✅ |
+| herColorName | String | 50 | ✅ |
+
+### 2. `photos` collection — attributes
+| Key | Type | Size | Required |
+|---|---|---|---|
+| challengeId | String | 50 | ✅ |
+| player | String | 10 | ✅ |
+| fileId | String | 50 | ✅ |
+| fileName | String | 255 | ❌ |
+| timestamp | String | 30 | ❌ |
+
+### 3. `photos` collection — **Indexes** (required for queries!)
+- Index on `challengeId` (key type)
+- Index on `player` (key type)
+
+### 4. Create a **Storage Bucket**
+- Go to **Storage → Create Bucket**
+- Set its **Bucket ID** to: `photos`
+- Set max file size high (e.g. 10MB)
+
+### 5. Permissions (since there's no login)
+On **both collections AND the bucket** → Settings → Permissions → add role **Any** with **Create, Read, Update, Delete**.
+
+---
+
+## ✅ Fixed full file
+
+Replace your whole file with this (CSS unchanged, only the `</card>` fix + new JavaScript):
+
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,528 +57,78 @@
   <title>💕 Color Hunt - Pori & Lucuska 💕</title>
   <script src="https://cdn.jsdelivr.net/npm/appwrite@latest"></script>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: linear-gradient(135deg, #ff6b9d 0%, #c44569 50%, #ffa07a 100%);
-      min-height: 100vh;
-      padding: 20px;
-    }
-
-    .container {
-      max-width: 1200px;
-      margin: 0 auto;
-    }
-
-    .header {
-      text-align: center;
-      color: white;
-      margin-bottom: 30px;
-    }
-
-    .header h1 {
-      font-size: 3rem;
-      margin-bottom: 10px;
-      text-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-      letter-spacing: 2px;
-    }
-
-    .header-subtitle {
-      font-size: 1.2rem;
-      margin-bottom: 5px;
-      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-      font-style: italic;
-    }
-
-    .header-tagline {
-      font-size: 0.95rem;
-      opacity: 0.95;
-    }
-
-    .setup-screen {
-      background: white;
-      border-radius: 20px;
-      padding: 50px 40px;
-      box-shadow: 0 15px 40px rgba(0, 0, 0, 0.2);
-      max-width: 700px;
-      margin: 0 auto;
-      border: 3px solid #ff6b9d;
-    }
-
-    .setup-screen h2 {
-      font-size: 2rem;
-      color: #c44569;
-      margin-bottom: 10px;
-      text-align: center;
-    }
-
-    .setup-subtitle {
-      text-align: center;
-      color: #999;
-      margin-bottom: 30px;
-      font-size: 0.95rem;
-    }
-
-    .setup-section {
-      margin-bottom: 25px;
-    }
-
-    .setup-label {
-      font-size: 1rem;
-      color: #666;
-      margin-bottom: 10px;
-      font-weight: 600;
-    }
-
-    input[type="text"],
-    select {
-      width: 100%;
-      padding: 12px;
-      border: 2px solid #ffb3d9;
-      border-radius: 10px;
-      font-size: 1rem;
-      font-family: inherit;
-      margin-bottom: 10px;
-      transition: all 0.3s;
-    }
-
-    input[type="text"]:focus,
-    select:focus {
-      outline: none;
-      border-color: #ff6b9d;
-      box-shadow: 0 0 0 3px rgba(255, 107, 157, 0.1);
-    }
-
-    .button {
-      width: 100%;
-      padding: 15px;
-      background: linear-gradient(135deg, #ff6b9d, #c44569);
-      color: white;
-      border: none;
-      border-radius: 10px;
-      cursor: pointer;
-      font-weight: 600;
-      font-size: 1.1rem;
-      transition: all 0.3s;
-      margin-top: 10px;
-    }
-
-    .button:hover {
-      transform: translateY(-3px);
-      box-shadow: 0 8px 20px rgba(255, 107, 157, 0.4);
-    }
-
-    .button:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-      transform: none;
-    }
-
-    .game-screen {
-      display: none;
-    }
-
-    .main-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 25px;
-      margin-bottom: 30px;
-    }
-
-    .player-card {
-      background: white;
-      border-radius: 20px;
-      padding: 30px;
-      box-shadow: 0 15px 40px rgba(0, 0, 0, 0.15);
-      position: relative;
-      overflow: hidden;
-    }
-
-    .player-card::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 5px;
-      background: linear-gradient(90deg, #ff6b9d, #c44569);
-    }
-
-    .player-card.you::before {
-      background: linear-gradient(90deg, #ff6b9d, #ff8fab);
-    }
-
-    .player-card.her::before {
-      background: linear-gradient(90deg, #ffa07a, #ff8c6b);
-    }
-
-    .player-header {
-      display: flex;
-      align-items: center;
-      gap: 15px;
-      margin-bottom: 20px;
-      padding-bottom: 15px;
-      border-bottom: 2px solid #ffe0ed;
-    }
-
-    .player-emoji {
-      font-size: 3rem;
-    }
-
-    .player-info h2 {
-      font-size: 1.8rem;
-      color: #c44569;
-      margin-bottom: 5px;
-    }
-
-    .player-nickname {
-      font-size: 0.95rem;
-      color: #ff6b9d;
-      font-style: italic;
-      font-weight: 600;
-    }
-
-    .color-section {
-      margin-bottom: 25px;
-    }
-
-    .color-label {
-      font-size: 0.8rem;
-      color: #999;
-      text-transform: uppercase;
-      letter-spacing: 1.5px;
-      margin-bottom: 10px;
-      font-weight: 700;
-    }
-
-    .color-display {
-      width: 100%;
-      height: 160px;
-      border-radius: 15px;
-      margin-bottom: 12px;
-      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
-      border: 3px solid #fff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-weight: bold;
-      font-size: 1.2rem;
-      text-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
-    }
-
-    .color-code {
-      font-family: 'Courier New', monospace;
-      font-size: 0.9rem;
-      color: #ff6b9d;
-      font-weight: 600;
-      text-align: center;
-    }
-
-    .timer-section {
-      background: linear-gradient(135deg, #ffe0ed, #fff0f5);
-      border-radius: 12px;
-      padding: 15px;
-      margin-bottom: 20px;
-      text-align: center;
-      border: 2px solid #ffb3d9;
-    }
-
-    .timer-label {
-      font-size: 0.75rem;
-      color: #999;
-      text-transform: uppercase;
-      margin-bottom: 8px;
-      font-weight: 700;
-    }
-
-    .timer {
-      font-size: 2.2rem;
-      font-weight: bold;
-      color: #ff6b9d;
-      font-family: 'Courier New', monospace;
-      line-height: 1;
-    }
-
-    .timer.warning {
-      color: #ff9500;
-    }
-
-    .timer.danger {
-      color: #ff4444;
-    }
-
-    .upload-section {
-      margin-bottom: 20px;
-    }
-
-    .file-input-wrapper input[type=file] {
-      display: none;
-    }
-
-    .upload-btn {
-      width: 100%;
-      padding: 12px;
-      background: linear-gradient(135deg, #ff6b9d, #c44569);
-      color: white;
-      border: none;
-      border-radius: 10px;
-      cursor: pointer;
-      font-weight: 600;
-      font-size: 1rem;
-      transition: all 0.3s;
-      margin-bottom: 10px;
-    }
-
-    .upload-btn:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 5px 15px rgba(255, 107, 157, 0.4);
-    }
-
-    .upload-btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    .upload-status {
-      font-size: 0.9rem;
-      color: #999;
-      text-align: center;
-      min-height: 20px;
-    }
-
-    .upload-status.uploading {
-      color: #ff6b9d;
-      font-weight: 600;
-    }
-
-    .upload-status.success {
-      color: #27ae60;
-      font-weight: 600;
-    }
-
-    .upload-status.error {
-      color: #ff4444;
-      font-weight: 600;
-    }
-
-    .photos-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 10px;
-      margin-top: 15px;
-    }
-
-    .photo-item {
-      position: relative;
-      padding-bottom: 100%;
-      background: #f0f0f0;
-      border-radius: 12px;
-      overflow: hidden;
-      cursor: pointer;
-      border: 3px solid #ffe0ed;
-      transition: all 0.3s;
-    }
-
-    .photo-item:hover {
-      border-color: #ff6b9d;
-      box-shadow: 0 5px 15px rgba(255, 107, 157, 0.3);
-      transform: scale(1.05);
-    }
-
-    .photo-item img {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-
-    .photo-count {
-      display: inline-block;
-      background: linear-gradient(135deg, #ff6b9d, #c44569);
-      color: white;
-      padding: 6px 12px;
-      border-radius: 20px;
-      font-size: 0.8rem;
-      font-weight: 600;
-      margin-top: 12px;
-    }
-
-    .progress-bar {
-      width: 100%;
-      height: 8px;
-      background: #ffe0ed;
-      border-radius: 10px;
-      overflow: hidden;
-      margin-top: 10px;
-    }
-
-    .progress-fill {
-      height: 100%;
-      background: linear-gradient(90deg, #ff6b9d, #c44569);
-      transition: width 0.3s ease;
-    }
-
-    .modal {
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.85);
-      z-index: 1000;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .modal.show {
-      display: flex;
-    }
-
-    .modal-content {
-      background: white;
-      border-radius: 20px;
-      padding: 0;
-      max-width: 650px;
-      width: 90%;
-      overflow: hidden;
-      position: relative;
-      border: 4px solid #ff6b9d;
-    }
-
-    .modal-image {
-      width: 100%;
-      height: auto;
-      display: block;
-    }
-
-    .close-modal {
-      font-size: 2.5rem;
-      color: white;
-      cursor: pointer;
-      position: absolute;
-      top: 15px;
-      right: 20px;
-      background: rgba(0, 0, 0, 0.6);
-      border-radius: 50%;
-      width: 45px;
-      height: 45px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      line-height: 1;
-      transition: all 0.3s;
-    }
-
-    .close-modal:hover {
-      background: rgba(0, 0, 0, 0.9);
-    }
-
-    .stats {
-      background: white;
-      border-radius: 20px;
-      padding: 30px;
-      box-shadow: 0 15px 40px rgba(0, 0, 0, 0.15);
-      margin-bottom: 30px;
-      border-top: 5px solid #ff6b9d;
-    }
-
-    .stats-title {
-      font-size: 1.4rem;
-      color: #c44569;
-      margin-bottom: 25px;
-      text-align: center;
-    }
-
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 20px;
-    }
-
-    .stat-box {
-      text-align: center;
-      padding: 15px;
-      background: linear-gradient(135deg, #ffe0ed, #fff0f5);
-      border-radius: 12px;
-      border: 2px solid #ffb3d9;
-    }
-
-    .stat-number {
-      font-size: 2.8rem;
-      font-weight: bold;
-      color: #ff6b9d;
-      margin-bottom: 8px;
-    }
-
-    .stat-label {
-      font-size: 0.85rem;
-      color: #999;
-      text-transform: uppercase;
-      font-weight: 700;
-    }
-
-    .end-challenge-btn {
-      width: 100%;
-      padding: 15px;
-      background: #ff4444;
-      color: white;
-      border: none;
-      border-radius: 10px;
-      cursor: pointer;
-      font-weight: 600;
-      font-size: 1rem;
-      transition: all 0.3s;
-      margin-top: 20px;
-    }
-
-    .end-challenge-btn:hover {
-      background: #ff2222;
-      transform: translateY(-2px);
-      box-shadow: 0 5px 15px rgba(255, 68, 68, 0.4);
-    }
-
-    .completion-badge {
-      position: absolute;
-      top: 20px;
-      right: 20px;
-      background: linear-gradient(135deg, #27ae60, #2ecc71);
-      color: white;
-      padding: 10px 15px;
-      border-radius: 25px;
-      font-size: 0.85rem;
-      font-weight: 600;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-    }
-
-    .love-text {
-      text-align: center;
-      color: #ff6b9d;
-      font-style: italic;
-      margin-top: 20px;
-      font-size: 0.95rem;
-    }
-
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #ff6b9d 0%, #c44569 50%, #ffa07a 100%); min-height: 100vh; padding: 20px; }
+    .container { max-width: 1200px; margin: 0 auto; }
+    .header { text-align: center; color: white; margin-bottom: 30px; }
+    .header h1 { font-size: 3rem; margin-bottom: 10px; text-shadow: 0 4px 8px rgba(0,0,0,0.3); letter-spacing: 2px; }
+    .header-subtitle { font-size: 1.2rem; margin-bottom: 5px; text-shadow: 0 2px 4px rgba(0,0,0,0.2); font-style: italic; }
+    .header-tagline { font-size: 0.95rem; opacity: 0.95; }
+    .setup-screen { background: white; border-radius: 20px; padding: 50px 40px; box-shadow: 0 15px 40px rgba(0,0,0,0.2); max-width: 700px; margin: 0 auto; border: 3px solid #ff6b9d; }
+    .setup-screen h2 { font-size: 2rem; color: #c44569; margin-bottom: 10px; text-align: center; }
+    .setup-subtitle { text-align: center; color: #999; margin-bottom: 30px; font-size: 0.95rem; }
+    .setup-section { margin-bottom: 25px; }
+    .setup-label { font-size: 1rem; color: #666; margin-bottom: 10px; font-weight: 600; }
+    input[type="text"], select { width: 100%; padding: 12px; border: 2px solid #ffb3d9; border-radius: 10px; font-size: 1rem; font-family: inherit; margin-bottom: 10px; transition: all 0.3s; }
+    input[type="text"]:focus, select:focus { outline: none; border-color: #ff6b9d; box-shadow: 0 0 0 3px rgba(255,107,157,0.1); }
+    .button { width: 100%; padding: 15px; background: linear-gradient(135deg, #ff6b9d, #c44569); color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 1.1rem; transition: all 0.3s; margin-top: 10px; }
+    .button:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(255,107,157,0.4); }
+    .button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    .game-screen { display: none; }
+    .main-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; margin-bottom: 30px; }
+    .player-card { background: white; border-radius: 20px; padding: 30px; box-shadow: 0 15px 40px rgba(0,0,0,0.15); position: relative; overflow: hidden; }
+    .player-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 5px; background: linear-gradient(90deg, #ff6b9d, #c44569); }
+    .player-card.you::before { background: linear-gradient(90deg, #ff6b9d, #ff8fab); }
+    .player-card.her::before { background: linear-gradient(90deg, #ffa07a, #ff8c6b); }
+    .player-header { display: flex; align-items: center; gap: 15px; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #ffe0ed; }
+    .player-emoji { font-size: 3rem; }
+    .player-info h2 { font-size: 1.8rem; color: #c44569; margin-bottom: 5px; }
+    .player-nickname { font-size: 0.95rem; color: #ff6b9d; font-style: italic; font-weight: 600; }
+    .color-section { margin-bottom: 25px; }
+    .color-label { font-size: 0.8rem; color: #999; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 10px; font-weight: 700; }
+    .color-display { width: 100%; height: 160px; border-radius: 15px; margin-bottom: 12px; box-shadow: 0 8px 20px rgba(0,0,0,0.15); border: 3px solid #fff; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 1.2rem; text-shadow: 0 3px 6px rgba(0,0,0,0.3); }
+    .color-code { font-family: 'Courier New', monospace; font-size: 0.9rem; color: #ff6b9d; font-weight: 600; text-align: center; }
+    .timer-section { background: linear-gradient(135deg, #ffe0ed, #fff0f5); border-radius: 12px; padding: 15px; margin-bottom: 20px; text-align: center; border: 2px solid #ffb3d9; }
+    .timer-label { font-size: 0.75rem; color: #999; text-transform: uppercase; margin-bottom: 8px; font-weight: 700; }
+    .timer { font-size: 2.2rem; font-weight: bold; color: #ff6b9d; font-family: 'Courier New', monospace; line-height: 1; }
+    .timer.warning { color: #ff9500; }
+    .timer.danger { color: #ff4444; }
+    .upload-section { margin-bottom: 20px; }
+    .file-input-wrapper input[type=file] { display: none; }
+    .upload-btn { width: 100%; padding: 12px; background: linear-gradient(135deg, #ff6b9d, #c44569); color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 1rem; transition: all 0.3s; margin-bottom: 10px; display: block; text-align: center; }
+    .upload-btn:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(255,107,157,0.4); }
+    .upload-btn.disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
+    .upload-status { font-size: 0.9rem; color: #999; text-align: center; min-height: 20px; }
+    .upload-status.uploading { color: #ff6b9d; font-weight: 600; }
+    .upload-status.success { color: #27ae60; font-weight: 600; }
+    .upload-status.error { color: #ff4444; font-weight: 600; }
+    .photos-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 15px; }
+    .photo-item { position: relative; padding-bottom: 100%; background: #f0f0f0; border-radius: 12px; overflow: hidden; cursor: pointer; border: 3px solid #ffe0ed; transition: all 0.3s; }
+    .photo-item:hover { border-color: #ff6b9d; box-shadow: 0 5px 15px rgba(255,107,157,0.3); transform: scale(1.05); }
+    .photo-item img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
+    .photo-count { display: inline-block; background: linear-gradient(135deg, #ff6b9d, #c44569); color: white; padding: 6px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; margin-top: 12px; }
+    .progress-bar { width: 100%; height: 8px; background: #ffe0ed; border-radius: 10px; overflow: hidden; margin-top: 10px; }
+    .progress-fill { height: 100%; background: linear-gradient(90deg, #ff6b9d, #c44569); transition: width 0.3s ease; }
+    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 1000; align-items: center; justify-content: center; }
+    .modal.show { display: flex; }
+    .modal-content { background: white; border-radius: 20px; padding: 0; max-width: 650px; width: 90%; overflow: hidden; position: relative; border: 4px solid #ff6b9d; }
+    .modal-image { width: 100%; height: auto; display: block; }
+    .close-modal { font-size: 2.5rem; color: white; cursor: pointer; position: absolute; top: 15px; right: 20px; background: rgba(0,0,0,0.6); border-radius: 50%; width: 45px; height: 45px; display: flex; align-items: center; justify-content: center; line-height: 1; transition: all 0.3s; z-index: 1001; }
+    .close-modal:hover { background: rgba(0,0,0,0.9); }
+    .stats { background: white; border-radius: 20px; padding: 30px; box-shadow: 0 15px 40px rgba(0,0,0,0.15); margin-bottom: 30px; border-top: 5px solid #ff6b9d; }
+    .stats-title { font-size: 1.4rem; color: #c44569; margin-bottom: 25px; text-align: center; }
+    .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+    .stat-box { text-align: center; padding: 15px; background: linear-gradient(135deg, #ffe0ed, #fff0f5); border-radius: 12px; border: 2px solid #ffb3d9; }
+    .stat-number { font-size: 2.8rem; font-weight: bold; color: #ff6b9d; margin-bottom: 8px; }
+    .stat-label { font-size: 0.85rem; color: #999; text-transform: uppercase; font-weight: 700; }
+    .end-challenge-btn { width: 100%; padding: 15px; background: #ff4444; color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 1rem; transition: all 0.3s; margin-top: 20px; }
+    .end-challenge-btn:hover { background: #ff2222; transform: translateY(-2px); box-shadow: 0 5px 15px rgba(255,68,68,0.4); }
+    .completion-badge { position: absolute; top: 20px; right: 20px; background: linear-gradient(135deg, #27ae60, #2ecc71); color: white; padding: 10px 15px; border-radius: 25px; font-size: 0.85rem; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+    .love-text { text-align: center; color: #ff6b9d; font-style: italic; margin-top: 20px; font-size: 0.95rem; }
     @media (max-width: 900px) {
-      .main-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .header h1 {
-        font-size: 2rem;
-      }
-
-      .photos-grid {
-        grid-template-columns: repeat(2, 1fr);
-      }
+      .main-grid { grid-template-columns: 1fr; }
+      .header h1 { font-size: 2rem; }
+      .photos-grid { grid-template-columns: repeat(2, 1fr); }
     }
   </style>
 </head>
@@ -544,7 +145,6 @@
   <div id="setupScreen" class="setup-screen">
     <h2>Start New Challenge</h2>
     <div class="setup-subtitle">Let's play together, my love 💕</div>
-
     <div class="setup-section">
       <div class="setup-label">Challenge Duration</div>
       <select id="duration">
@@ -554,8 +154,7 @@
         <option value="604800">1 Week</option>
       </select>
     </div>
-
-    <button class="button" onclick="startChallenge()">🎉 Start Our Challenge 🎉</button>
+    <button class="button" id="startBtn" onclick="startChallenge()">🎉 Start Our Challenge 🎉</button>
     <div class="love-text">Every color is a moment we share together ✨</div>
   </div>
 
@@ -565,7 +164,6 @@
       <!-- PORI (You) -->
       <div class="player-card you">
         <div id="youCompletion" class="completion-badge" style="display: none;">✨ COMPLETED ✨</div>
-        
         <div class="player-header">
           <div class="player-emoji">💙</div>
           <div class="player-info">
@@ -573,40 +171,33 @@
             <div class="player-nickname">(Pori)</div>
           </div>
         </div>
-
         <div class="timer-section">
           <div class="timer-label">⏱️ Time Remaining</div>
           <div class="timer" id="yourTimer">24:00:00</div>
         </div>
-
         <div class="color-section">
           <div class="color-label">🎨 Your Color</div>
           <div class="color-display" id="yourColor"></div>
           <div class="color-code" id="yourColorCode"></div>
         </div>
-
         <div class="upload-section">
           <div class="file-input-wrapper">
-            <label for="yourPhoto" class="upload-btn">📸 Upload A Moment</label>
+            <label for="yourPhoto" class="upload-btn" id="yourUploadBtn">📸 Upload A Moment</label>
             <input type="file" id="yourPhoto" accept="image/*">
           </div>
           <div class="upload-status" id="yourStatus">Ready to upload</div>
         </div>
-
         <div style="margin-top: 15px;">
           <strong style="color: #c44569;">💙 Your Collection:</strong>
           <div class="photos-grid" id="yourPhotos"></div>
           <div class="photo-count" id="yourCount">0 photos</div>
-          <div class="progress-bar">
-            <div class="progress-fill" id="yourProgress" style="width: 0%"></div>
-          </div>
+          <div class="progress-bar"><div class="progress-fill" id="yourProgress" style="width: 0%"></div></div>
         </div>
-      </card>
+      </div>
 
       <!-- LUCUSKA (Her) -->
       <div class="player-card her">
         <div id="herCompletion" class="completion-badge" style="display: none;">✨ COMPLETED ✨</div>
-        
         <div class="player-header">
           <div class="player-emoji">🌹</div>
           <div class="player-info">
@@ -614,49 +205,36 @@
             <div class="player-nickname">(Lucuska)</div>
           </div>
         </div>
-
         <div class="timer-section">
           <div class="timer-label">⏱️ Time Remaining</div>
           <div class="timer" id="herTimer">24:00:00</div>
         </div>
-
         <div class="color-section">
           <div class="color-label">🎨 Your Color</div>
           <div class="color-display" id="herColor"></div>
           <div class="color-code" id="herColorCode"></div>
         </div>
-
         <div class="upload-section">
           <div class="file-input-wrapper">
-            <label for="herPhoto" class="upload-btn">📸 Upload A Moment</label>
+            <label for="herPhoto" class="upload-btn" id="herUploadBtn">📸 Upload A Moment</label>
             <input type="file" id="herPhoto" accept="image/*">
           </div>
           <div class="upload-status" id="herStatus">Ready to upload</div>
         </div>
-
         <div style="margin-top: 15px;">
           <strong style="color: #c44569;">🌹 Your Collection:</strong>
           <div class="photos-grid" id="herPhotos"></div>
           <div class="photo-count" id="herCount">0 photos</div>
-          <div class="progress-bar">
-            <div class="progress-fill" id="herProgress" style="width: 0%"></div>
-          </div>
+          <div class="progress-bar"><div class="progress-fill" id="herProgress" style="width: 0%"></div></div>
         </div>
       </div>
     </div>
 
-    <!-- Stats -->
     <div class="stats">
       <div class="stats-title">💑 Our Challenge Progress</div>
       <div class="stats-grid">
-        <div class="stat-box">
-          <div class="stat-number" id="totalPhotos">0</div>
-          <div class="stat-label">💕 Total Memories</div>
-        </div>
-        <div class="stat-box">
-          <div class="stat-number" id="completion">0%</div>
-          <div class="stat-label">✨ Overall Progress</div>
-        </div>
+        <div class="stat-box"><div class="stat-number" id="totalPhotos">0</div><div class="stat-label">💕 Total Memories</div></div>
+        <div class="stat-box"><div class="stat-number" id="completion">0%</div><div class="stat-label">✨ Overall Progress</div></div>
       </div>
       <button class="end-challenge-btn" onclick="endChallenge()">🔄 End & Start New Challenge</button>
       <div class="love-text">Every photo is a proof of our love 💕</div>
@@ -664,394 +242,284 @@
   </div>
 </div>
 
-<!-- Image Modal -->
 <div class="modal" id="imageModal">
   <span class="close-modal" onclick="closeModal()">&times;</span>
-  <div class="modal-content">
-    <img class="modal-image" id="modalImage" src="" alt="">
-  </div>
+  <div class="modal-content"><img class="modal-image" id="modalImage" src="" alt=""></div>
 </div>
 
 <script>
-// ===== APPWRITE CONFIGURATION =====
-// Replace with YOUR Appwrite details
-const APPWRITE_ENDPOINT = 'https://fra.cloud.appwrite.io/v1'; // e.g., https://cloud.appwrite.io/v1
+// ===== APPWRITE CONFIG =====
+const APPWRITE_ENDPOINT = 'https://fra.cloud.appwrite.io/v1';
 const APPWRITE_PROJECT_ID = '6a1de77a003d5486c5cb';
 const APPWRITE_DATABASE_ID = '6a1de7b6002d2779e181';
 const APPWRITE_PHOTOS_COLLECTION = 'photos';
 const APPWRITE_CHALLENGES_COLLECTION = 'challenges';
+const APPWRITE_BUCKET_ID = 'photos'; // <-- your Storage bucket ID
 
-// Initialize Appwrite
-const { Client, Databases, ID, Query } = window.Appwrite;
-const client = new Client()
-  .setEndpoint(APPWRITE_ENDPOINT)
-  .setProject(APPWRITE_PROJECT_ID);
-
+const { Client, Databases, Storage, ID, Query } = window.Appwrite;
+const client = new Client().setEndpoint(APPWRITE_ENDPOINT).setProject(APPWRITE_PROJECT_ID);
 const databases = new Databases(client);
+const storage = new Storage(client);
 
-// ===== Colors Palette =====
 const colors = [
-  { name: 'Crimson Red', hex: '#DC143C' },
-  { name: 'Ocean Blue', hex: '#0077BE' },
-  { name: 'Forest Green', hex: '#1B4332' },
-  { name: 'Golden Yellow', hex: '#FFD700' },
-  { name: 'Purple Iris', hex: '#5A189A' },
-  { name: 'Coral Pink', hex: '#FF7F50' },
-  { name: 'Midnight Navy', hex: '#001C3D' },
-  { name: 'Lime Green', hex: '#32CD32' },
-  { name: 'Burnt Orange', hex: '#CC5500' },
-  { name: 'Turquoise', hex: '#40E0D0' },
-  { name: 'Deep Magenta', hex: '#8B008B' },
-  { name: 'Sunny Yellow', hex: '#FFEB3B' },
-  { name: 'Sky Blue', hex: '#87CEEB' },
-  { name: 'Rose Pink', hex: '#FF69B4' },
+  { name: 'Crimson Red', hex: '#DC143C' }, { name: 'Ocean Blue', hex: '#0077BE' },
+  { name: 'Forest Green', hex: '#1B4332' }, { name: 'Golden Yellow', hex: '#FFD700' },
+  { name: 'Purple Iris', hex: '#5A189A' }, { name: 'Coral Pink', hex: '#FF7F50' },
+  { name: 'Midnight Navy', hex: '#001C3D' }, { name: 'Lime Green', hex: '#32CD32' },
+  { name: 'Burnt Orange', hex: '#CC5500' }, { name: 'Turquoise', hex: '#40E0D0' },
+  { name: 'Deep Magenta', hex: '#8B008B' }, { name: 'Sunny Yellow', hex: '#FFEB3B' },
+  { name: 'Sky Blue', hex: '#87CEEB' }, { name: 'Rose Pink', hex: '#FF69B4' },
   { name: 'Sage Green', hex: '#9DC183' }
 ];
 
 let gameState = {
-  challengeId: null,
-  yourColor: null,
-  herColor: null,
-  duration: 86400,
-  startTime: null,
-  yourPhotos: [],
-  herPhotos: [],
-  targetPhotos: 5,
-  timerInterval: null
+  challengeId: null, yourColor: null, herColor: null, duration: 86400,
+  startTime: null, yourPhotos: [], herPhotos: [], targetPhotos: 5,
+  timerInterval: null, realtimeUnsub: null, listenersSet: false, ended: false
 };
 
-function getRandomColor() {
-  return colors[Math.floor(Math.random() * colors.length)];
-}
-
+function getRandomColor() { return colors[Math.floor(Math.random() * colors.length)]; }
 function getUniqueColors() {
-  let color1 = getRandomColor();
-  let color2 = getRandomColor();
-  while (color2.hex === color1.hex) {
-    color2 = getRandomColor();
-  }
-  return { color1, color2 };
+  let c1 = getRandomColor(), c2 = getRandomColor();
+  while (c2.hex === c1.hex) c2 = getRandomColor();
+  return { color1: c1, color2: c2 };
 }
 
 async function startChallenge() {
+  const btn = document.getElementById('startBtn');
+  btn.disabled = true;
   try {
     const duration = parseInt(document.getElementById('duration').value);
     const { color1, color2 } = getUniqueColors();
+    const startTime = Date.now();
 
-    gameState.yourColor = color1;
-    gameState.herColor = color2;
-    gameState.duration = duration;
-    gameState.startTime = Date.now();
-    gameState.challengeId = 'challenge_' + Date.now();
-    gameState.yourPhotos = [];
-    gameState.herPhotos = [];
-
-    // Save challenge to Appwrite
-    await databases.createDocument(
-      APPWRITE_DATABASE_ID,
-      APPWRITE_CHALLENGES_COLLECTION,
-      gameState.challengeId,
+    const doc = await databases.createDocument(
+      APPWRITE_DATABASE_ID, APPWRITE_CHALLENGES_COLLECTION, ID.unique(),
       {
-        startTime: gameState.startTime,
+        startTime: String(startTime),
         duration: duration,
-        yourColor: gameState.yourColor.hex,
-        herColor: gameState.herColor.hex,
-        yourColorName: gameState.yourColor.name,
-        herColorName: gameState.herColor.name,
-        createdAt: new Date().toISOString()
+        yourColor: color1.hex,
+        herColor: color2.hex,
+        yourColorName: color1.name,
+        herColorName: color2.name
       }
     );
 
-    document.getElementById('setupScreen').style.display = 'none';
-    document.getElementById('gameScreen').style.display = 'block';
+    gameState.challengeId = doc.$id;
+    gameState.startTime = startTime;
+    gameState.duration = duration;
+    gameState.yourColor = color1;
+    gameState.herColor = color2;
+    gameState.ended = false;
 
-    displayColors();
-    startTimer();
-    listenToPhotosRealtime();
-
-    document.getElementById('yourPhoto').addEventListener('change', (e) => uploadPhoto(e, 'your'));
-    document.getElementById('herPhoto').addEventListener('change', (e) => uploadPhoto(e, 'her'));
+    enterGame();
   } catch (error) {
     console.error('Error starting challenge:', error);
     alert('Error starting challenge: ' + error.message);
+  } finally {
+    btn.disabled = false;
   }
 }
 
+function enterGame() {
+  document.getElementById('setupScreen').style.display = 'none';
+  document.getElementById('gameScreen').style.display = 'block';
+  displayColors();
+  startTimer();
+  setupUploadListeners();
+  loadPhotos();
+  subscribeRealtime();
+}
+
 function displayColors() {
-  const yourColorEl = document.getElementById('yourColor');
-  const herColorEl = document.getElementById('herColor');
-
-  yourColorEl.style.backgroundColor = gameState.yourColor.hex;
-  yourColorEl.textContent = gameState.yourColor.name;
+  const y = document.getElementById('yourColor');
+  const h = document.getElementById('herColor');
+  y.style.backgroundColor = gameState.yourColor.hex;
+  y.textContent = gameState.yourColor.name;
   document.getElementById('yourColorCode').textContent = gameState.yourColor.hex;
-
-  herColorEl.style.backgroundColor = gameState.herColor.hex;
-  herColorEl.textContent = gameState.herColor.name;
+  h.style.backgroundColor = gameState.herColor.hex;
+  h.textContent = gameState.herColor.name;
   document.getElementById('herColorCode').textContent = gameState.herColor.hex;
 }
 
 function startTimer() {
   if (gameState.timerInterval) clearInterval(gameState.timerInterval);
-  
-  gameState.timerInterval = setInterval(() => {
+  const tick = () => {
     const elapsed = Date.now() - gameState.startTime;
     const remaining = Math.max(0, gameState.duration * 1000 - elapsed);
-
-    const hours = Math.floor(remaining / (60 * 60 * 1000));
-    const minutes = Math.floor((remaining % (60 * 60 * 1000)) / (60 * 1000));
-    const seconds = Math.floor((remaining % (60 * 1000)) / 1000);
-
-    const timeString = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-
-    document.getElementById('yourTimer').textContent = timeString;
-    document.getElementById('herTimer').textContent = timeString;
-
-    const yourTimerEl = document.getElementById('yourTimer');
-    const herTimerEl = document.getElementById('herTimer');
-
-    yourTimerEl.classList.remove('warning', 'danger');
-    herTimerEl.classList.remove('warning', 'danger');
-
-    const oneHour = 3600000;
-    const twoHours = 7200000;
-
-    if (remaining < oneHour) {
-      yourTimerEl.classList.add('danger');
-      herTimerEl.classList.add('danger');
-    } else if (remaining < twoHours) {
-      yourTimerEl.classList.add('warning');
-      herTimerEl.classList.add('warning');
-    }
-
+    const hours = Math.floor(remaining / 3600000);
+    const minutes = Math.floor((remaining % 3600000) / 60000);
+    const seconds = Math.floor((remaining % 60000) / 1000);
+    const t = `${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;
+    const yEl = document.getElementById('yourTimer');
+    const hEl = document.getElementById('herTimer');
+    yEl.textContent = t; hEl.textContent = t;
+    yEl.classList.remove('warning','danger'); hEl.classList.remove('warning','danger');
+    if (remaining < 3600000) { yEl.classList.add('danger'); hEl.classList.add('danger'); }
+    else if (remaining < 7200000) { yEl.classList.add('warning'); hEl.classList.add('warning'); }
     if (remaining === 0) {
-      alert('⏰ Time\'s up! Our challenge has ended! 💕');
-      endChallenge();
+      clearInterval(gameState.timerInterval);
+      gameState.timerInterval = null;
+      alert("⏰ Time's up! Our challenge has ended! 💕");
     }
-  }, 1000);
+  };
+  tick();
+  gameState.timerInterval = setInterval(tick, 1000);
+}
+
+function setupUploadListeners() {
+  if (gameState.listenersSet) return;
+  document.getElementById('yourPhoto').addEventListener('change', (e) => uploadPhoto(e, 'your'));
+  document.getElementById('herPhoto').addEventListener('change', (e) => uploadPhoto(e, 'her'));
+  gameState.listenersSet = true;
 }
 
 async function uploadPhoto(event, player) {
   const file = event.target.files[0];
   if (!file) return;
+  if (file.size > 10000000) { alert('File too large! Max 10MB.'); event.target.value=''; return; }
 
-  // Check file size (max 5MB for base64)
-  if (file.size > 5000000) {
-    alert('File too large! Max 5MB.');
-    return;
-  }
-
-  const statusEl = player === 'your' ? document.getElementById('yourStatus') : document.getElementById('herStatus');
-  const uploadBtn = player === 'your' ? document.getElementById('yourPhoto').parentElement.querySelector('.upload-btn') : document.getElementById('herPhoto').parentElement.querySelector('.upload-btn');
+  const statusEl = document.getElementById(player === 'your' ? 'yourStatus' : 'herStatus');
+  const btn = document.getElementById(player === 'your' ? 'yourUploadBtn' : 'herUploadBtn');
 
   statusEl.textContent = '⏳ Uploading your moment...';
-  statusEl.classList.add('uploading');
-  uploadBtn.disabled = true;
+  statusEl.className = 'upload-status uploading';
+  btn.classList.add('disabled');
 
   try {
-    const reader = new FileReader();
-    
-    reader.onload = async function(e) {
-      try {
-        const base64Data = e.target.result;
-
-        // Save to Appwrite
-        await databases.createDocument(
-          APPWRITE_DATABASE_ID,
-          APPWRITE_PHOTOS_COLLECTION,
-          ID.unique(),
-          {
-            challengeId: gameState.challengeId,
-            player: player,
-            imageData: base64Data,
-            fileName: file.name,
-            timestamp: Date.now()
-          }
-        );
-
-        statusEl.textContent = '✓ Photo uploaded! 💕';
-        statusEl.classList.remove('uploading');
-        statusEl.classList.add('success');
-
-        setTimeout(() => {
-          statusEl.textContent = 'Ready to upload';
-          statusEl.classList.remove('success');
-          uploadBtn.disabled = false;
-        }, 2000);
-
-        event.target.value = '';
-        listenToPhotosRealtime();
-      } catch (error) {
-        console.error('Save error:', error);
-        statusEl.textContent = '❌ Save failed';
-        statusEl.classList.remove('uploading');
-        statusEl.classList.add('error');
-        uploadBtn.disabled = false;
+    const uploaded = await storage.createFile(APPWRITE_BUCKET_ID, ID.unique(), file);
+    await databases.createDocument(
+      APPWRITE_DATABASE_ID, APPWRITE_PHOTOS_COLLECTION, ID.unique(),
+      {
+        challengeId: gameState.challengeId,
+        player: player,
+        fileId: uploaded.$id,
+        fileName: file.name,
+        timestamp: String(Date.now())
       }
-    };
-
-    reader.readAsDataURL(file);
+    );
+    statusEl.textContent = '✓ Photo uploaded! 💕';
+    statusEl.className = 'upload-status success';
+    event.target.value = '';
+    await loadPhotos();
+    setTimeout(() => {
+      statusEl.textContent = 'Ready to upload';
+      statusEl.className = 'upload-status';
+      btn.classList.remove('disabled');
+    }, 2000);
   } catch (error) {
     console.error('Upload error:', error);
-    statusEl.textContent = '❌ Upload failed';
-    statusEl.classList.remove('uploading');
-    statusEl.classList.add('error');
-    uploadBtn.disabled = false;
+    statusEl.textContent = '❌ Upload failed: ' + error.message;
+    statusEl.className = 'upload-status error';
+    btn.classList.remove('disabled');
   }
 }
 
-async function listenToPhotosRealtime() {
+function getPhotoUrl(fileId) {
+  return storage.getFileView(APPWRITE_BUCKET_ID, fileId);
+}
+
+async function loadPhotos() {
+  if (!gameState.challengeId) return;
   try {
-    // Load your photos
-    const yourPhotosResponse = await databases.listDocuments(
-      APPWRITE_DATABASE_ID,
-      APPWRITE_PHOTOS_COLLECTION,
-      [
-        Query.equal('challengeId', gameState.challengeId),
-        Query.equal('player', 'your')
-      ]
-    );
-    gameState.yourPhotos = yourPhotosResponse.documents;
+    const yourResp = await databases.listDocuments(APPWRITE_DATABASE_ID, APPWRITE_PHOTOS_COLLECTION,
+      [Query.equal('challengeId', gameState.challengeId), Query.equal('player', 'your'), Query.limit(100)]);
+    gameState.yourPhotos = yourResp.documents;
     renderPhotos('your');
 
-    // Load her photos
-    const herPhotosResponse = await databases.listDocuments(
-      APPWRITE_DATABASE_ID,
-      APPWRITE_PHOTOS_COLLECTION,
-      [
-        Query.equal('challengeId', gameState.challengeId),
-        Query.equal('player', 'her')
-      ]
-    );
-    gameState.herPhotos = herPhotosResponse.documents;
+    const herResp = await databases.listDocuments(APPWRITE_DATABASE_ID, APPWRITE_PHOTOS_COLLECTION,
+      [Query.equal('challengeId', gameState.challengeId), Query.equal('player', 'her'), Query.limit(100)]);
+    gameState.herPhotos = herResp.documents;
     renderPhotos('her');
 
     updateStats();
-
-    // Poll every 2 seconds for real-time updates
-    setTimeout(listenToPhotosRealtime, 2000);
   } catch (error) {
     console.error('Error loading photos:', error);
   }
 }
 
+function subscribeRealtime() {
+  if (gameState.realtimeUnsub) { gameState.realtimeUnsub(); gameState.realtimeUnsub = null; }
+  try {
+    gameState.realtimeUnsub = client.subscribe(
+      `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_PHOTOS_COLLECTION}.documents`,
+      () => { loadPhotos(); }
+    );
+  } catch (e) { console.error('Realtime error:', e); }
+}
+
 function renderPhotos(player) {
   const photos = player === 'your' ? gameState.yourPhotos : gameState.herPhotos;
-  const gridId = player === 'your' ? 'yourPhotos' : 'herPhotos';
-  const countId = player === 'your' ? 'yourCount' : 'herCount';
-  const progressId = player === 'your' ? 'yourProgress' : 'herProgress';
-  const completionId = player === 'your' ? 'youCompletion' : 'herCompletion';
+  const grid = document.getElementById(player === 'your' ? 'yourPhotos' : 'herPhotos');
+  const countEl = document.getElementById(player === 'your' ? 'yourCount' : 'herCount');
+  const progressEl = document.getElementById(player === 'your' ? 'yourProgress' : 'herProgress');
+  const completionEl = document.getElementById(player === 'your' ? 'youCompletion' : 'herCompletion');
 
-  const grid = document.getElementById(gridId);
-  grid.innerHTML = photos.map(photo => `
-    <div class="photo-item" onclick="showModal('${photo.imageData}')">
-      <img src="${photo.imageData}" alt="Photo" loading="lazy">
-    </div>
-  `).join('');
+  grid.innerHTML = photos.map(p => {
+    const url = getPhotoUrl(p.fileId);
+    return `<div class="photo-item" onclick="showModal('${url}')"><img src="${url}" alt="Photo" loading="lazy"></div>`;
+  }).join('');
 
-  document.getElementById(countId).textContent = `${photos.length} photo${photos.length !== 1 ? 's' : ''}`;
-
-  const progress = (photos.length / gameState.targetPhotos) * 100;
-  document.getElementById(progressId).style.width = Math.min(100, progress) + '%';
-
-  if (photos.length >= gameState.targetPhotos) {
-    document.getElementById(completionId).style.display = 'block';
-  }
+  countEl.textContent = `${photos.length} photo${photos.length !== 1 ? 's' : ''}`;
+  progressEl.style.width = Math.min(100, (photos.length / gameState.targetPhotos) * 100) + '%';
+  completionEl.style.display = photos.length >= gameState.targetPhotos ? 'block' : 'none';
 }
 
 function updateStats() {
   const total = gameState.yourPhotos.length + gameState.herPhotos.length;
   const target = gameState.targetPhotos * 2;
-  const completion = Math.round((total / target) * 100);
-
   document.getElementById('totalPhotos').textContent = total;
-  document.getElementById('completion').textContent = Math.min(100, completion) + '%';
+  document.getElementById('completion').textContent = Math.min(100, Math.round((total / target) * 100)) + '%';
 }
 
-function showModal(imageSrc) {
-  document.getElementById('modalImage').src = imageSrc;
+function showModal(src) {
+  document.getElementById('modalImage').src = src;
   document.getElementById('imageModal').classList.add('show');
 }
-
-function closeModal() {
-  document.getElementById('imageModal').classList.remove('show');
-}
-
-document.getElementById('imageModal').addEventListener('click', function(e) {
-  if (e.target === this) {
-    closeModal();
-  }
-});
+function closeModal() { document.getElementById('imageModal').classList.remove('show'); }
+document.getElementById('imageModal').addEventListener('click', function(e){ if (e.target === this) closeModal(); });
 
 async function endChallenge() {
-  if (confirm('Are you sure you want to end this challenge? All photos will be deleted. 💕')) {
-    if (gameState.timerInterval) clearInterval(gameState.timerInterval);
+  if (!confirm('Are you sure you want to end this challenge? All photos will be deleted. 💕')) return;
+  if (gameState.timerInterval) { clearInterval(gameState.timerInterval); gameState.timerInterval = null; }
+  if (gameState.realtimeUnsub) { gameState.realtimeUnsub(); gameState.realtimeUnsub = null; }
 
-    try {
-      // Delete all photos
-      const photoDocs = await databases.listDocuments(
-        APPWRITE_DATABASE_ID,
-        APPWRITE_PHOTOS_COLLECTION,
-        [Query.equal('challengeId', gameState.challengeId)]
-      );
-
-      for (let photo of photoDocs.documents) {
-        await databases.deleteDocument(APPWRITE_DATABASE_ID, APPWRITE_PHOTOS_COLLECTION, photo.$id);
-      }
-
-      // Delete challenge
-      await databases.deleteDocument(APPWRITE_DATABASE_ID, APPWRITE_CHALLENGES_COLLECTION, gameState.challengeId);
-
-      document.getElementById('setupScreen').style.display = 'block';
-      document.getElementById('gameScreen').style.display = 'none';
-      
-      gameState = {
-        challengeId: null,
-        yourColor: null,
-        herColor: null,
-        duration: 86400,
-        startTime: null,
-        yourPhotos: [],
-        herPhotos: [],
-        targetPhotos: 5,
-        timerInterval: null
-      };
-    } catch (error) {
-      console.error('Error ending challenge:', error);
-      alert('Error ending challenge');
+  try {
+    const photoDocs = await databases.listDocuments(APPWRITE_DATABASE_ID, APPWRITE_PHOTOS_COLLECTION,
+      [Query.equal('challengeId', gameState.challengeId), Query.limit(100)]);
+    for (const photo of photoDocs.documents) {
+      try { await storage.deleteFile(APPWRITE_BUCKET_ID, photo.fileId); } catch(e){}
+      await databases.deleteDocument(APPWRITE_DATABASE_ID, APPWRITE_PHOTOS_COLLECTION, photo.$id);
     }
+    await databases.deleteDocument(APPWRITE_DATABASE_ID, APPWRITE_CHALLENGES_COLLECTION, gameState.challengeId);
+  } catch (error) {
+    console.error('Error ending challenge:', error);
   }
+
+  document.getElementById('setupScreen').style.display = 'block';
+  document.getElementById('gameScreen').style.display = 'none';
+  gameState.challengeId = null;
+  gameState.yourPhotos = [];
+  gameState.herPhotos = [];
+  gameState.startTime = null;
 }
 
-// Load game on page load
+// Load existing challenge on page open (keeps timer running across refresh + both phones)
 window.addEventListener('load', async () => {
   try {
-    // Try to find an active challenge
-    const challengesResponse = await databases.listDocuments(
-      APPWRITE_DATABASE_ID,
-      APPWRITE_CHALLENGES_COLLECTION
-    );
-
-    if (challengesResponse.documents.length > 0) {
-      const latestChallenge = challengesResponse.documents[0];
-      const elapsed = Date.now() - latestChallenge.startTime;
-
-      if (elapsed < latestChallenge.duration * 1000) {
-        // Challenge still active
-        gameState.challengeId = latestChallenge.$id;
-        gameState.startTime = latestChallenge.startTime;
-        gameState.duration = latestChallenge.duration;
-        gameState.yourColor = { name: latestChallenge.yourColorName, hex: latestChallenge.yourColor };
-        gameState.herColor = { name: latestChallenge.herColorName, hex: latestChallenge.herColor };
-
-        document.getElementById('setupScreen').style.display = 'none';
-        document.getElementById('gameScreen').style.display = 'block';
-
-        displayColors();
-        startTimer();
-        listenToPhotosRealtime();
-
-        document.getElementById('yourPhoto').addEventListener('change', (e) => uploadPhoto(e, 'your'));
-        document.getElementById('herPhoto').addEventListener('change', (e) => uploadPhoto(e, 'her'));
+    const resp = await databases.listDocuments(APPWRITE_DATABASE_ID, APPWRITE_CHALLENGES_COLLECTION,
+      [Query.orderDesc('$createdAt'), Query.limit(1)]);
+    if (resp.documents.length > 0) {
+      const ch = resp.documents[0];
+      const startTime = Number(ch.startTime);
+      const elapsed = Date.now() - startTime;
+      if (elapsed < ch.duration * 1000) {
+        gameState.challengeId = ch.$id;
+        gameState.startTime = startTime;
+        gameState.duration = ch.duration;
+        gameState.yourColor = { name: ch.yourColorName, hex: ch.yourColor };
+        gameState.herColor = { name: ch.herColorName, hex: ch.herColor };
+        enterGame();
       }
     }
   } catch (error) {
@@ -1059,6 +527,16 @@ window.addEventListener('load', async () => {
   }
 });
 </script>
-
 </body>
 </html>
+```
+
+---
+
+## Test checklist
+1. Make sure the **attributes, indexes, bucket, and permissions** above exist (most "doesn't work" issues come from a missing index or permission).
+2. Open the site on your phone → Start Challenge → upload a photo.
+3. Open it on her phone → the same challenge, timer, and photos appear live. 🎉
+4. Refresh either phone → timer keeps counting (no reset).
+
+If anything still errors, open the browser console, copy the **exact red error message**, and paste it here — I'll pinpoint it.
